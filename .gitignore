@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Lock files - let npm handle dependencies
+package-lock.json
+yarn.lock
+bun.lockb
+
 # Environment variables
 .env
 .env.local
