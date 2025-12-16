@@ -3,11 +3,13 @@ import { useState, useCallback, useEffect } from "react";
 interface Settings {
   userName: string;
   voiceSpeed: number;
+  volume: number;
 }
 
 const DEFAULT_SETTINGS: Settings = {
   userName: "Student",
   voiceSpeed: 1,
+  volume: 1,
 };
 
 const STORAGE_KEY = "homework-hacker-settings";
@@ -55,6 +57,12 @@ export function useSettings() {
     updateSettings({ voiceSpeed: clamped });
   }, [updateSettings]);
 
+  const updateVolume = useCallback((volume: number) => {
+    // Clamp between 0 and 1
+    const clamped = Math.max(0, Math.min(1, volume));
+    updateSettings({ volume: clamped });
+  }, [updateSettings]);
+
   const resetSettings = useCallback(() => {
     setSettings(DEFAULT_SETTINGS);
     localStorage.removeItem(STORAGE_KEY);
@@ -67,6 +75,7 @@ export function useSettings() {
     updateSettings,
     updateUserName,
     updateVoiceSpeed,
+    updateVolume,
     resetSettings,
   };
 }

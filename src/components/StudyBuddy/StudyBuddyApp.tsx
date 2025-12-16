@@ -14,21 +14,23 @@ import { SettingsModal } from "../Settings/SettingsModal";
 import { MuteToggle } from "./MuteToggle";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import PhoneDetector from "../PhoneDetection"; // Import PhoneDetector
 
 export function HomeworkHackerApp() {
   const [showWakeWordUI, setShowWakeWordUI] = useState(true);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [shouldBypassMute, setShouldBypassMute] = useState(false);
+  const [debugMode, setDebugMode] = useState(false); // DEBUG: Toggle to use mock AI responses
   const lastSpokenMessageIdRef = useRef<string | null>(null);
+  const lastMutedMessageIdRef = useRef<string | null>(null); // Track messages skipped due to mute
   const screenStateRef = useRef({ hasPermission: false, isEnabled: false });
   const screenRecordingTriggeredRef = useRef<string | null>(null);
 
   console.log("[HomeworkHacker] App render");
   
   // Load settings
-  const { settings, isLoaded, updateUserName, updateVoiceSpeed, resetSettings } = useSettings();
+  const { settings, isLoaded, updateUserName, updateVoiceSpeed, updateVolume, resetSettings } = useSettings();
 
   const {
     messages,
@@ -36,7 +38,8 @@ export function HomeworkHackerApp() {
     personality,
     setPersonality,
     sendMessage,
-    sendAIPromptWithoutUserMessage, // Destructure the new function
+    sendAIPromptWithoutUserMessage,
+    sendMockMessage,
     clearMessages,
   } = useHomeworkHacker({ personality: "neutral", userName: settings.userName });
 
@@ -62,6 +65,13 @@ export function HomeworkHackerApp() {
     screenStateRef.current = { hasPermission: hasScreenPermission, isEnabled: isScreenEnabled };
     console.log("[HomeworkHacker] Screen state ref UPDATED:", screenStateRef.current);
   }, [hasScreenPermission, isScreenEnabled]);
+
+  // Stop speaking when the page reloads or component unmounts
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, [stopSpeaking]);
 
   const handleVoiceResult = useCallback(
     async (transcript: string) => {
@@ -136,32 +146,43 @@ export function HomeworkHackerApp() {
     },
   });
 
-  // Stop speaking if muted (unless bypassed for phone detection)
-  useEffect(() => {
-    if (isMuted && !shouldBypassMute) {
-      stopSpeaking();
-    }
-  }, [isMuted, stopSpeaking, shouldBypassMute]);
-
-  // Speak the latest assistant message
+  // Bypass mute during scolding - check last message type instead of flag
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
+    const isScolding = lastMessage?.role === "assistant" && lastMessage?.type === "scolding";
+    
+    if (isMuted && !isScolding) {
+      stopSpeaking();
+    }
+  }, [isMuted, stopSpeaking, messages]);
+
+  // Speak the latest assistant message (skipping if muted, unless it's a scolding message)
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    const isScolding = lastMessage?.type === "scolding";
+    
     if (
       lastMessage?.role === "assistant" &&
       lastMessage.content &&
       !isLoading &&
       !isSpeaking &&
-      lastMessage.id !== lastSpokenMessageIdRef.current &&
-      (!isMuted || shouldBypassMute)
+      lastMessage.id !== lastSpokenMessageIdRef.current
     ) {
+      // If muted and not scolding, track that we skipped this message
+      if (isMuted && !isScolding) {
+        lastMutedMessageIdRef.current = lastMessage.id;
+        return;
+      }
+      
+      // Don't speak if this message was already skipped due to mute
+      if (lastMessage.id === lastMutedMessageIdRef.current) {
+        return;
+      }
+      
       lastSpokenMessageIdRef.current = lastMessage.id;
       speak(lastMessage.content, settings.voiceSpeed);
-      // Reset bypass flag after speaking is triggered
-      if (shouldBypassMute) {
-        setShouldBypassMute(false);
-      }
     }
-  }, [messages, isLoading, isSpeaking, speak, settings.voiceSpeed, isMuted, shouldBypassMute]);
+  }, [messages, isLoading, isSpeaking, speak, settings.voiceSpeed, isMuted]);
 
   // When AI finishes speaking, enable the reply window (allow instant replies for 2 seconds)
   useEffect(() => {
@@ -223,11 +244,10 @@ export function HomeworkHackerApp() {
       scoldingSystemInstruction = `You are a supportive AI assistant. Gently remind the user to refocus on their studies. Your tone should be kind and encouraging, emphasizing the importance of concentration without being harsh. The user has been too much on their phone. Keep the response concise and helpful. After gently reminding them, encourage them to get back to their studies. Only write alphabetic letters, full stops, and commas.`;
       toastTitle = "Gentle Reminder!";
       toastDescription = "You have been reminded";
-      // Bypass mute to always speak phone detection response
-      setShouldBypassMute(true);
     }
     
-    sendAIPromptWithoutUserMessage(scoldingSystemInstruction, null, "The user has been distracted by their phone. Please provide feedback.");
+    // Send scolding message - the message type will prevent mute from working
+    sendAIPromptWithoutUserMessage(scoldingSystemInstruction, null, "The user has been distracted by their phone. Please provide feedback.", "scolding");
     toast({
       title: toastTitle,
       description: toastDescription,
@@ -238,9 +258,13 @@ export function HomeworkHackerApp() {
 
   const handleTypedMessage = useCallback(
     async (message: string, images: string[] | null) => {
-      sendMessage(message, images);
+      if (debugMode) {
+        sendMockMessage(message);
+      } else {
+        sendMessage(message, images);
+      }
     },
-    [sendMessage]
+    [sendMessage, sendMockMessage, debugMode]
   );
   
   const getStatusText = () => {
@@ -274,7 +298,6 @@ export function HomeworkHackerApp() {
             </div>
             <div>
               <h1 className="font-semibold text-foreground">Homework Hacker</h1>
-              <p className="text-xs text-muted-foreground">AI-powered study companion</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -289,6 +312,20 @@ export function HomeworkHackerApp() {
               <Settings className="h-5 w-5" />
             </Button>
             <MuteToggle isMuted={isMuted} onToggle={() => setIsMuted(prev => !prev)} />
+            {/* DEBUG: Mock AI Toggle - DELETE THIS BUTTON WHEN DONE TESTING */}
+            <Button
+              onClick={() => setDebugMode(prev => !prev)}
+              variant="ghost"
+              size="sm"
+              title="Mock AI mode (no tokens used)"
+              className={cn(
+                "text-foreground hover:bg-[#68639c] hover:text-white",
+                debugMode && "bg-red-500 text-white hover:bg-red-600"
+              )}
+            >
+              <span className="text-xs font-medium">{debugMode ? "Debug ON" : "Debug OFF"}</span>
+            </Button>
+            {/* END DEBUG BUTTON */}
           </div>
         </div>
       </header>
@@ -337,6 +374,21 @@ export function HomeworkHackerApp() {
             <div className="mt-2">
               <PhoneDetector onPhoneDetectedForTooLong={handlePhoneDetectedForTooLong} />
             </div>
+
+            {/* DEBUG: Test Phone Detection - Only shows in debug mode */}
+            {debugMode && (
+              <div className="mt-4 pt-4 border-t border-muted">
+                <Button
+                  onClick={() => handlePhoneDetectedForTooLong()}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                >
+                  Test Phone Detection
+                </Button>
+              </div>
+            )}
+            {/* END DEBUG SECTION */}
           </div>
         </div>
 
@@ -362,6 +414,8 @@ export function HomeworkHackerApp() {
           onUserNameChange={updateUserName}
           voiceSpeed={settings.voiceSpeed}
           onVoiceSpeedChange={updateVoiceSpeed}
+          volume={settings.volume}
+          onVolumeChange={updateVolume}
           onResetSettings={resetSettings}
         />
       )}

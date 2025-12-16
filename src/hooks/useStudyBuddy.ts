@@ -8,6 +8,7 @@ export interface Message {
   content: string;
   timestamp: Date;
   images?: string[];
+  type?: "normal" | "scolding"; // Type of message: normal conversation or phone detection scolding
 }
 
 interface UseHomeworkHackerOptions {
@@ -240,9 +241,10 @@ export function useHomeworkHacker(options: UseHomeworkHackerOptions = {}) {
 
   // New function to send AI prompt without adding a user message to chat
   const sendAIPromptWithoutUserMessage = useCallback(
-    async (content: string, images?: string[] | null, overrideSystemInstruction?: string) => {
+    async (content: string, images?: string[] | null, overrideSystemInstruction?: string, messageType: "normal" | "scolding" = "normal") => {
       console.log("[useHomeworkHacker] ========================================");
       console.log("[useHomeworkHacker] sendAIPromptWithoutUserMessage() called");
+      console.log("[useHomeworkHacker] Message type:", messageType);
       console.log("[useHomeworkHacker] Prompt content:", content.substring(0, 100));
       console.log("[useHomeworkHacker] Images provided:", images?.length || 0);
       console.log("[useHomeworkHacker] Override System Instruction provided:", !!overrideSystemInstruction);
@@ -308,6 +310,7 @@ export function useHomeworkHacker(options: UseHomeworkHackerOptions = {}) {
             role: "assistant",
             content: "",
             timestamp: new Date(),
+            type: messageType,
           },
         ]);
 
@@ -379,6 +382,37 @@ export function useHomeworkHacker(options: UseHomeworkHackerOptions = {}) {
     [personality, userName]
   );
 
+  // DEBUG: Add mock AI response without using API
+  const sendMockMessage = useCallback(
+    (userContent: string) => {
+      // Add user message
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: userContent,
+          timestamp: new Date(),
+        },
+      ]);
+
+      // Simulate AI response after delay
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: "This is a long response message. Blah blah blah blah blah. Blah blah blah blah blah. Blah blah blah blah blah.",
+            timestamp: new Date(),
+            type: "normal",
+          },
+        ]);
+      }, 500);
+    },
+    []
+  );
+
   return {
     messages,
     isLoading,
@@ -386,6 +420,7 @@ export function useHomeworkHacker(options: UseHomeworkHackerOptions = {}) {
     setPersonality,
     sendMessage,
     sendAIPromptWithoutUserMessage, // Export the new function
+    sendMockMessage, // Export debug function
     cancelRequest,
     clearMessages,
   };

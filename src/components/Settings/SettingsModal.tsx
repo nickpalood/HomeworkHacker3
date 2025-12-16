@@ -13,6 +13,8 @@ interface SettingsModalProps {
   onUserNameChange: (name: string) => void;
   voiceSpeed: number;
   onVoiceSpeedChange: (speed: number) => void;
+  volume: number;
+  onVolumeChange: (volume: number) => void;
   onResetSettings: () => void;
 }
 
@@ -23,20 +25,19 @@ export function SettingsModal({
   onUserNameChange,
   voiceSpeed,
   onVoiceSpeedChange,
+  volume,
+  onVolumeChange,
   onResetSettings,
 }: SettingsModalProps) {
   const [tempUserName, setTempUserName] = useState(userName);
 
-  const handleSave = () => {
-    onUserNameChange(tempUserName.trim() || "Student");
-    onClose();
+  const handleUserNameChange = (name: string) => {
+    setTempUserName(name);
+    onUserNameChange(name.trim() || "Student");
   };
 
-  const handleReset = () => {
-    if (window.confirm("Are you sure you want to reset all settings to defaults?")) {
-      onResetSettings();
-      setTempUserName("Student");
-    }
+  const handleClose = () => {
+    onClose();
   };
 
   return (
@@ -65,7 +66,7 @@ export function SettingsModal({
               id="userName"
               placeholder="Enter your name"
               value={tempUserName}
-              onChange={(e) => setTempUserName(e.target.value)}
+              onChange={(e) => handleUserNameChange(e.target.value)}
               className="mt-2 bg-gray-100 text-black focus-visible:ring-2 focus-visible:ring-[#f67555]"
             />
           </div>
@@ -93,13 +94,38 @@ export function SettingsModal({
             </div>
           </div>
 
+          {/* Volume Section */}
+          <div className="space-y-3">
+            <Label className="peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-base font-semibold">Volume</Label>
+            <p className="text-sm text-gray-500">
+              Adjust the overall volume level
+            </p>
+            <div className="space-y-3 mt-3">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs text-gray-500 font-mono">0%</span>
+                <span className="text-sm font-semibold">{Math.round(volume * 100)}%</span>
+                <span className="text-xs text-gray-500 font-mono">100%</span>
+              </div>
+              <Slider
+                value={[volume]}
+                onValueChange={(value) => onVolumeChange(value[0])}
+                min={0}
+                max={1}
+                step={0.05}
+                className="w-full"
+              />
+            </div>
+          </div>
+
           {/* Action Buttons */}
           <div className="space-y-2 pt-4 border-t border-gray-200">
-            <Button onClick={handleSave} className="w-full bg-[#f67555] text-white hover:bg-[#f67555]/90">
-              Save Settings
-            </Button>
             <Button
-              onClick={handleReset}
+              onClick={() => {
+                if (window.confirm("Are you sure you want to reset all settings to defaults?")) {
+                  onResetSettings();
+                  setTempUserName("Student");
+                }
+              }}
               variant="outline"
               className="w-full text-destructive hover:bg-destructive/10"
             >
