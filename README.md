@@ -22,11 +22,7 @@ Make sure you have:
    ```
    This downloads all the packages the app needs to run.
 
-3. **Create a `.env` file** in the root directory and add your API keys:
-   ```
-   VITE_GOOGLE_API_KEY=your_api_key_here
-   ```
-   You'll need to get API keys from Google and other services the app uses.
+3. **Download the `.env` file from the gc** and paste it in the root directory
 
 4. **Install Python dependencies** for the backend:
    ```bash
