@@ -49,49 +49,49 @@ This creates an optimized version of the app in the `dist` folder.
 ## Technologies Used
 
 ### Frontend
-- React 18 - UI library for building interactive components
-- TypeScript - Superset of JavaScript with static typing
-- Vite - Fast build tool and development server
-- Tailwind CSS - Utility-first CSS framework for styling
-- shadcn/ui - Accessible React components built on Radix UI primitives
-- Radix UI - Headless UI component library for accessibility
-- React Router - Client-side routing
-- React Query (TanStack Query) - Server state management and data fetching
-- Lucide React - Icon library
-- Sonner - Toast notification system
-- Google Generative AI SDK - Integration with Gemini API
-- Web Speech API - Native browser speech recognition and synthesis
-- class-variance-authority - Utility for CSS class variant generation
-- next-themes - Theme management (light/dark mode support)
-- cmdk - Command menu component
-- embla-carousel-react - Carousel/slider functionality
-- vaul - Drawer component primitive
-- input-otp - OTP input component
-- react-resizable-panels - Resizable panel layouts
-- clsx - Conditional class name utility
-- tailwind-merge - Merge Tailwind CSS classes intelligently
+- React 18 - Component-based UI framework
+- TypeScript - Type safety and developer experience
+- Vite - Instant server start and fast HMR
+- Tailwind CSS - Rapid styling with utility classes
+- shadcn/ui - Pre-built accessible components
+- Radix UI - Accessible component primitives
+- React Router - Multi-page app routing
+- React Query - Server state and caching
+- Lucide React - Consistent icon system
+- Sonner - Modern toast notifications
+- Google Generative AI SDK - AI responses via Gemini
+- Web Speech API - Voice input/output functionality
+- class-variance-authority - Type-safe component variants
+- next-themes - Light/dark mode switching
+- cmdk - Command palette interface
+- embla-carousel-react - Carousel component
+- vaul - Drawer/modal component
+- input-otp - OTP input field
+- react-resizable-panels - Resizable UI layouts
+- clsx - Conditional class management
+- tailwind-merge - Smart class conflict resolution
 
 ### Backend
-- Python - Core programming language
-- FastAPI - Modern web framework for building APIs
-- Uvicorn - ASGI server for running FastAPI
-- PyTorch - Deep learning framework
-- YOLOv5 - Object detection model for phone detection
-- Pillow - Image processing library
-- Python-multipart - Multipart request parsing
-- OpenCV - Computer vision library
-- python-dotenv - Environment variable management
-- Requests - HTTP client library
+- Python - Rapid development and ML libraries
+- FastAPI - High-performance API framework
+- Uvicorn - ASGI server for async support
+- PyTorch - Deep learning model inference
+- YOLOv5 - Real-time phone detection
+- Pillow - Image processing and conversion
+- Python-multipart - File upload handling
+- OpenCV - Computer vision operations
+- python-dotenv - Secure credential management
+- Requests - HTTP communication
 
 ### Development Tools
-- Node.js - JavaScript runtime
-- npm - Package manager
-- ESLint - Code linting
-- TypeScript ESLint - TypeScript linting
-- Concurrently - Run multiple processes in parallel
-- PostCSS - CSS processing tool
-- Autoprefixer - Vendor prefix automation
-- SWC - Fast JavaScript/TypeScript compiler
+- Node.js - JavaScript runtime environment
+- npm - Dependency management
+- ESLint - Code quality enforcement
+- TypeScript ESLint - Type-aware linting
+- Concurrently - Parallel process execution
+- PostCSS - CSS transformation pipeline
+- Autoprefixer - Browser compatibility prefixes
+- SWC - Rust-based fast compilation
 
 ## Troubleshooting
 
