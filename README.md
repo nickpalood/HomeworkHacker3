@@ -55,15 +55,21 @@ This creates an optimized version of the app in the `dist` folder.
 - Tailwind CSS - Utility-first CSS framework for styling
 - shadcn/ui - Accessible React components built on Radix UI primitives
 - Radix UI - Headless UI component library for accessibility
-- React Hook Form - Efficient form state management
-- React Query - Server state management and data fetching
 - React Router - Client-side routing
-- Zod - TypeScript-first schema validation
+- React Query (TanStack Query) - Server state management and data fetching
 - Lucide React - Icon library
-- Recharts - Data visualization library
 - Sonner - Toast notification system
 - Google Generative AI SDK - Integration with Gemini API
 - Web Speech API - Native browser speech recognition and synthesis
+- class-variance-authority - Utility for CSS class variant generation
+- next-themes - Theme management (light/dark mode support)
+- cmdk - Command menu component
+- embla-carousel-react - Carousel/slider functionality
+- vaul - Drawer component primitive
+- input-otp - OTP input component
+- react-resizable-panels - Resizable panel layouts
+- clsx - Conditional class name utility
+- tailwind-merge - Merge Tailwind CSS classes intelligently
 
 ### Backend
 - Python - Core programming language
