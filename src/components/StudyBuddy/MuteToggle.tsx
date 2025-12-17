@@ -18,7 +18,7 @@ export function MuteToggle({ isMuted, onToggle }: MuteToggleProps) {
       onClick={onToggle} 
       title={title} 
       className={cn(
-        "text-foreground hover:bg-[#68639c] hover:text-white",
+        "text-foreground hover:bg-secondary hover:text-white hover:glow-secondary transition-all",
         isMuted && "bg-red-500 text-white hover:bg-red-600"
       )}
     >

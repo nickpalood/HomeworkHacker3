@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 
-// #region Type definitions for Web Speech API
 interface SpeechRecognitionEvent extends Event {
   resultIndex: number;
   results: SpeechRecognitionResultList;
@@ -45,7 +44,6 @@ declare global {
     webkitSpeechRecognition?: SpeechRecognitionConstructor;
   }
 }
-// #endregion
 
 export type ListeningState = "idle" | "listening_for_wakeword" | "listening_for_command" | "listening_for_reply";
 
@@ -57,6 +55,8 @@ interface UseSpeechRecognitionOptions {
   onSpeechStart?: () => void;
   onSpeechEnd?: () => void;
   isAISpeaking?: boolean;
+  isUserMicDisabled?: boolean; // User explicitly disabled mic - overrides auto-management
+  isUserMicEnabled?: boolean; // User explicitly enabled mic - overrides auto-management
 }
 
 export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) {
@@ -68,37 +68,48 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   const replyWindowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const wakeWord = options.wakeWord || "hey buddy";
   const isAISpeakingRef = useRef(options.isAISpeaking || false);
+  
+  // User mic control - tracks whether user has explicitly disabled the mic
+  const isUserMicDisabledRef = useRef(options.isUserMicDisabled || false);
+  const isUserMicEnabledRef = useRef(options.isUserMicEnabled || false);
 
   console.log("[SpeechRecognition] useSpeechRecognition hook rendered/called");
 
-  // Use a ref for state to avoid stale closures in event handlers
   const listeningStateRef = useRef(listeningState);
-  
-  // Update the ref whenever isAISpeaking changes
+  const lastFinalTranscript = useRef("");
+  const isIntentionallyStopped = useRef(false);
+  const replyWindowSpeechDetectedRef = useRef(false);
+  const replyWindowTranscriptRef = useRef("");
+  const replyWindowSilenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const replyWindowStartTimeRef = useRef<number>(0);
+
+  const onResultRef = useRef(options.onResult);
+  const onCommandStartRef = useRef(options.onCommandStart);
+  const onWakeWordDetectedRef = useRef(options.onWakeWordDetected);
+
   useEffect(() => {
     isAISpeakingRef.current = options.isAISpeaking || false;
   }, [options.isAISpeaking]);
 
   useEffect(() => {
+    isUserMicDisabledRef.current = options.isUserMicDisabled || false;
+    isUserMicEnabledRef.current = options.isUserMicEnabled || false;
+    console.log("[SpeechRecognition] User mic control updated:", {
+      disabled: isUserMicDisabledRef.current,
+      enabled: isUserMicEnabledRef.current,
+    });
+  }, [options.isUserMicDisabled, options.isUserMicEnabled]);
+
+  useEffect(() => {
     listeningStateRef.current = listeningState;
   }, [listeningState]);
 
-  // Ref to track the transcript from the last final result to avoid re-processing
-  const lastFinalTranscript = useRef("");
+  useEffect(() => {
+    onResultRef.current = options.onResult;
+    onCommandStartRef.current = options.onCommandStart;
+    onWakeWordDetectedRef.current = options.onWakeWordDetected;
+  }, [options.onResult, options.onCommandStart, options.onWakeWordDetected]);
 
-  // Track if stop was intentional (to prevent auto-restart on onend)
-  const isIntentionallyStopped = useRef(false);
-
-  // Track if we've detected speech in the reply window (to keep accumulating text)
-  const replyWindowSpeechDetectedRef = useRef(false);
-
-  // Accumulate text during reply window (in case user speaks multiple phrases)
-  const replyWindowTranscriptRef = useRef("");
-  
-  // Timeout to detect silence in reply window and auto-submit
-  const replyWindowSilenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Memoize callbacks to prevent unnecessary recreations
   const onResult = useMemo(() => options.onResult, [options.onResult]);
   const onCommandStart = useMemo(() => options.onCommandStart, [options.onCommandStart]);
   const onWakeWordDetected = useMemo(() => options.onWakeWordDetected, [options.onWakeWordDetected]);
@@ -120,43 +131,47 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     const recognition = new SpeechRecognition();
     console.log("[SpeechRecognition] Recognition instance created");
 
-    // Set up ALL event handlers BEFORE configuring
     recognition.onstart = () => {
       console.log("[SpeechRecognition] ✓ onstart event - Service has started listening");
     };
 
     recognition.onspeechstart = () => {
       console.log("[SpeechRecognition] ✓ onspeechstart event - Audio/speech input detected");
+      const currentState = listeningStateRef.current;
+      const timeSinceReplyWindowStart = Date.now() - replyWindowStartTimeRef.current;
+      
+      if (currentState === "listening_for_reply") {
+        console.log(`[SpeechRecognition] 🎤 Speech detected in reply window (${timeSinceReplyWindowStart}ms since reply started)`);
+        
+        if (timeSinceReplyWindowStart < 300) {
+          console.log("[SpeechRecognition] ⚠️ Speech detected too soon after reply window opened - likely AI echo, will ignore");
+        }
+      }
     };
 
     recognition.onspeechend = () => {
       console.log("[SpeechRecognition] ✗ onspeechend event - Speech/audio has stopped being detected");
       
-      // If we're in reply window and speech was detected, set a timeout to submit after silence
       if (listeningStateRef.current === "listening_for_reply" && replyWindowSpeechDetectedRef.current) {
         console.log("[SpeechRecognition] 🎙️ User stopped speaking, waiting 500ms to ensure we have final text...");
         
-        // Clear any existing silence timeout
         if (replyWindowSilenceTimeoutRef.current) {
           clearTimeout(replyWindowSilenceTimeoutRef.current);
         }
         
-        // Set a short timeout to allow final speech-to-text results to arrive
         replyWindowSilenceTimeoutRef.current = setTimeout(() => {
           const accumulatedText = replyWindowTranscriptRef.current.trim();
           if (accumulatedText) {
             console.log(`[SpeechRecognition] 🎙️ [onspeechend] Submitting accumulated text after silence: "${accumulatedText}"`);
             
-            // Clear the reply window timeout since we're processing the response
             if (replyWindowTimeoutRef.current) {
               clearTimeout(replyWindowTimeoutRef.current);
               replyWindowTimeoutRef.current = null;
             }
             
-            // Send the accumulated text
+            onResultRef.current?.(accumulatedText);
             onResult?.(accumulatedText);
             
-            // Reset reply window state
             replyWindowSpeechDetectedRef.current = false;
             replyWindowTranscriptRef.current = "";
             lastFinalTranscript.current = "";
@@ -169,7 +184,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      // Concatenate all new transcripts since the last event
       let interimTranscript = "";
       let finalTranscript = "";
 
@@ -194,24 +208,31 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       if (interimTranscript) {
         console.log(`[SpeechRecognition] 🎤 Interim (live): "${interimTranscript}"`);
 
-        // Check for wake word in interim results too (for faster detection)
         if (listeningStateRef.current === "listening_for_wakeword") {
           const wakeWordLower = wakeWord.toLowerCase();
           const interimLower = interimTranscript.toLowerCase();
           if (interimLower.includes(wakeWordLower)) {
             console.log("[SpeechRecognition] 🎯 WAKE WORD DETECTED IN INTERIM!");
-            onWakeWordDetected?.();
+            if (isAISpeakingRef.current) {
+              console.log("[SpeechRecognition] 🛑 AI INTERRUPTED - User said wake word while AI was speaking!");
+            }
+            onWakeWordDetectedRef.current?.();
           }
         }
         
-        // If in reply mode, accumulate interim text as well
         if (listeningStateRef.current === "listening_for_reply" && !isAISpeakingRef.current) {
+          const timeSinceReplyWindowStart = Date.now() - replyWindowStartTimeRef.current;
+          
+          if (timeSinceReplyWindowStart < 300) {
+            console.log(`[SpeechRecognition] ⏭️ Ignoring interim in reply mode - too soon (${timeSinceReplyWindowStart}ms), likely AI echo: "${interimTranscript}"`);
+            return;
+          }
+          
           console.log(`[SpeechRecognition] 🎤 Reply mode - interim detected: "${interimTranscript}"`);
           if (!replyWindowSpeechDetectedRef.current) {
             console.log("[SpeechRecognition] 📍 First speech detected in reply window (interim), starting to accumulate...");
             replyWindowSpeechDetectedRef.current = true;
             
-            // Clear the reply window timeout since we detected speech
             if (replyWindowTimeoutRef.current) {
               clearTimeout(replyWindowTimeoutRef.current);
               replyWindowTimeoutRef.current = null;
@@ -224,7 +245,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       if (finalTranscript) {
         console.log(`[SpeechRecognition] ✅ FINAL TEXT: "${finalTranscript}"`);
 
-        // Skip if this is the same transcript we just processed
         if (finalTranscript === lastFinalTranscript.current) {
           console.log("[SpeechRecognition] ⏭️ Skipping duplicate final transcript");
           return;
@@ -244,11 +264,14 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
           if (wakeWordIndex !== -1) {
             console.log("[SpeechRecognition] 🎯 WAKE WORD DETECTED!");
-            // IMMEDIATELY stop recognition to prevent audio feedback when speech synthesis starts
-            console.log("[SpeechRecognition] ⚠️ Stopping recognition immediately to prevent microphone feedback");
-            onWakeWordDetected?.();
+            
+            if (isAISpeakingRef.current) {
+              console.log("[SpeechRecognition] 🛑 AI INTERRUPTED - User said wake word while AI was speaking!");
+            }
+            
+            onWakeWordDetectedRef.current?.();
             isIntentionallyStopped.current = true;
-            lastFinalTranscript.current = ""; // Reset for next cycle
+            lastFinalTranscript.current = "";
             recognitionRef.current?.stop();
 
             const command = finalTranscript
@@ -257,14 +280,13 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
             if (command) {
               console.log(`[SpeechRecognition] 🎙️ Command with wake word: "${command}"`);
-              onResult?.(command);
+              onResultRef.current?.(command);
             } else {
               console.log("[SpeechRecognition] Wake word detected but no command yet. Waiting for command (2 second timeout)...");
-              lastFinalTranscript.current = ""; // Reset for next cycle
+              lastFinalTranscript.current = "";
               setListeningState("listening_for_command");
-              onCommandStart?.();
+              onCommandStartRef.current?.();
 
-              // Set a 2-second timeout to go back to continuous listening if no command is spoken
               if (commandTimeoutRef.current) {
                 clearTimeout(commandTimeoutRef.current);
               }
@@ -273,7 +295,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
                 setListeningState("listening_for_wakeword");
                 isIntentionallyStopped.current = false;
                 commandTimeoutRef.current = null;
-                // Stop recognition to trigger onend handler which will auto-restart
                 try {
                   recognitionRef.current?.stop();
                   console.log("[SpeechRecognition] ✓ Stopped recognition to return to continuous listening");
@@ -288,34 +309,37 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         } else if (currentState === "listening_for_command") {
           console.log(`[SpeechRecognition] 🎙️ Processing command: "${finalTranscript}"`);
           
-          // Clear the timeout since we got a command
           if (commandTimeoutRef.current) {
             clearTimeout(commandTimeoutRef.current);
             commandTimeoutRef.current = null;
             console.log("[SpeechRecognition] ✓ Cleared command timeout (command received)");
           }
           
-          onResult?.(finalTranscript);
-          lastFinalTranscript.current = ""; // Reset for next cycle
+          onResultRef.current?.(finalTranscript);
+          lastFinalTranscript.current = "";
           setListeningState("listening_for_wakeword");
-          // Don't set intentionallyStopped - let it restart automatically for continuous listening
           recognitionRef.current?.stop();
         } else if (currentState === "listening_for_reply") {
-          // Only process if AI is NOT currently speaking
           if (isAISpeakingRef.current) {
             console.log(`[SpeechRecognition] ⏸️ AI is still speaking, ignoring transcript: "${finalTranscript}"`);
-            lastFinalTranscript.current = ""; // Reset for next cycle
+            lastFinalTranscript.current = "";
+            return;
+          }
+
+          const timeSinceReplyWindowStart = Date.now() - replyWindowStartTimeRef.current;
+          
+          if (timeSinceReplyWindowStart < 300) {
+            console.log(`[SpeechRecognition] ⏭️ Ignoring final text in reply mode - too soon (${timeSinceReplyWindowStart}ms), likely AI echo: "${finalTranscript}"`);
+            lastFinalTranscript.current = "";
             return;
           }
 
           console.log(`[SpeechRecognition] 🎙️ Detected speech in reply window: "${finalTranscript}"`);
           
-          // Mark that we've detected speech and start accumulating
           if (!replyWindowSpeechDetectedRef.current) {
             console.log("[SpeechRecognition] 📍 First speech detected in reply window, starting to accumulate text...");
             replyWindowSpeechDetectedRef.current = true;
             
-            // Clear the reply window timeout since we detected speech
             if (replyWindowTimeoutRef.current) {
               clearTimeout(replyWindowTimeoutRef.current);
               replyWindowTimeoutRef.current = null;
@@ -323,27 +347,22 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
             }
           }
           
-          // Remove wake word from the transcript before accumulating
           const wakeWordLower = wakeWord.toLowerCase();
           const finalLower = finalTranscript.toLowerCase();
           const wakeWordIndex = finalLower.indexOf(wakeWordLower);
           
           let textToAccumulate = finalTranscript;
           if (wakeWordIndex !== -1) {
-            // Remove the wake word and everything before it
             textToAccumulate = finalTranscript.substring(wakeWordIndex + wakeWord.length).trim();
             console.log(`[SpeechRecognition] 🚫 Removed wake word. Original: "${finalTranscript}" → Cleaned: "${textToAccumulate}"`);
           }
           
-          // Only accumulate if there's text after removing the wake word
           if (textToAccumulate) {
             replyWindowTranscriptRef.current += (replyWindowTranscriptRef.current ? " " : "") + textToAccumulate;
             console.log(`[SpeechRecognition] 📝 Accumulated text so far: "${replyWindowTranscriptRef.current}"`);
           }
-          lastFinalTranscript.current = ""; // Reset for next cycle
+          lastFinalTranscript.current = "";
           
-          // Set a timeout to submit the accumulated text after 1 second of no new final results
-          // This allows us to capture multi-part speech before submitting
           if (replyWindowTimeoutRef.current) {
             clearTimeout(replyWindowTimeoutRef.current);
           }
@@ -353,9 +372,8 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
             const accumulatedText = replyWindowTranscriptRef.current.trim();
             if (accumulatedText) {
               console.log(`[SpeechRecognition] 🎙️ Submitting reply: "${accumulatedText}"`);
-              onResult?.(accumulatedText);
+              onResultRef.current?.(accumulatedText);
               
-              // Reset reply window state
               replyWindowSpeechDetectedRef.current = false;
               replyWindowTranscriptRef.current = "";
               lastFinalTranscript.current = "";
@@ -372,37 +390,30 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       console.log("[SpeechRecognition] ✗ onend event - recognition service ended");
       const currentState = listeningStateRef.current;
       console.log(`[SpeechRecognition] Current state on end: ${currentState}`);
+      console.log(`[SpeechRecognition] isIntentionallyStopped: ${isIntentionallyStopped.current}`);
 
-      // Fallback: If we're in reply mode and have accumulated text, send it
-      // (in case onspeechend didn't fire reliably)
       if (currentState === "listening_for_reply" && replyWindowSpeechDetectedRef.current) {
         const accumulatedText = replyWindowTranscriptRef.current.trim();
         if (accumulatedText) {
           console.log(`[SpeechRecognition] 🎙️ [FALLBACK] User stopped talking in reply window. Sending accumulated text: "${accumulatedText}"`);
           
-          // Clear the reply window timeout since we're processing the response
           if (replyWindowTimeoutRef.current) {
             clearTimeout(replyWindowTimeoutRef.current);
             replyWindowTimeoutRef.current = null;
           }
           
-          // Send the accumulated text
-          onResult?.(accumulatedText);
+          onResultRef.current?.(accumulatedText);
           
-          // Reset reply window state
           replyWindowSpeechDetectedRef.current = false;
           replyWindowTranscriptRef.current = "";
           lastFinalTranscript.current = "";
           setListeningState("listening_for_wakeword");
-          // Don't call stop() here since onend is already being called
           isIntentionallyStopped.current = false;
           return;
         }
       }
 
-      // Auto-restart if we're not in idle state (for continuous listening)
-      // The isIntentionallyStopped flag only prevents restart when user explicitly stops
-      if (currentState !== "idle") {
+      if (currentState !== "idle" && !isIntentionallyStopped.current) {
         console.log("[SpeechRecognition] ↻ Restarting recognition service for continuous listening...");
         try {
           recognitionRef.current?.start();
@@ -413,7 +424,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       } else {
         console.log("[SpeechRecognition] Recognition service stopped (user requested idle state)");
       }
-      // Reset the intentionally stopped flag
       isIntentionallyStopped.current = false;
     };
 
@@ -421,7 +431,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       console.error("[SpeechRecognition] ❌ ERROR EVENT:", event.error);
     };
 
-    // NOW set configuration AFTER handlers are attached
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
@@ -432,22 +441,18 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
     return () => {
       console.log("[SpeechRecognition] Cleanup: Cleaning up recognition instance");
-      // Clear any pending restart timeout
       if (restartTimeoutRef.current) {
         clearTimeout(restartTimeoutRef.current);
         restartTimeoutRef.current = null;
       }
-      // Clear any pending command timeout
       if (commandTimeoutRef.current) {
         clearTimeout(commandTimeoutRef.current);
         commandTimeoutRef.current = null;
       }
-      // Clear any pending reply window timeout
       if (replyWindowTimeoutRef.current) {
         clearTimeout(replyWindowTimeoutRef.current);
         replyWindowTimeoutRef.current = null;
       }
-      // Clear any pending reply window silence timeout
       if (replyWindowSilenceTimeoutRef.current) {
         clearTimeout(replyWindowSilenceTimeoutRef.current);
         replyWindowSilenceTimeoutRef.current = null;
@@ -466,7 +471,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         try {
           recognitionRef.current.stop();
         } catch (e) {
-          // Already stopped
         }
       }
     };
@@ -486,7 +490,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       return;
     }
 
-    // Request microphone permission first
     console.log("[SpeechRecognition] 🎤 Requesting microphone permission with echo cancellation...");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -499,7 +502,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       });
       console.log("[SpeechRecognition] ✓ Microphone permission granted with echo cancellation!");
 
-      // Stop all tracks - we don't need the stream, we just needed permission
       stream.getTracks().forEach(track => {
         console.log(`[SpeechRecognition] Stopping track: ${track.kind}`);
         track.stop();
@@ -540,25 +542,21 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     isIntentionallyStopped.current = true;
     setListeningState("idle");
 
-    // Clear any pending restart timeout when user manually stops
     if (restartTimeoutRef.current) {
       clearTimeout(restartTimeoutRef.current);
       restartTimeoutRef.current = null;
     }
 
-    // Clear any pending command timeout when user manually stops
     if (commandTimeoutRef.current) {
       clearTimeout(commandTimeoutRef.current);
       commandTimeoutRef.current = null;
     }
 
-    // Clear any pending reply window timeout when user manually stops
     if (replyWindowTimeoutRef.current) {
       clearTimeout(replyWindowTimeoutRef.current);
       replyWindowTimeoutRef.current = null;
     }
 
-    // Clear any pending reply window silence timeout when user manually stops
     if (replyWindowSilenceTimeoutRef.current) {
       clearTimeout(replyWindowSilenceTimeoutRef.current);
       replyWindowSilenceTimeoutRef.current = null;
@@ -572,49 +570,73 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     }
   }, []);
 
+  const pauseRecognition = useCallback(() => {
+    console.log("[SpeechRecognition] ⏸️ pauseRecognition called - DEPRECATED: Recognition now stays active during AI speech for interruptions");
+  }, []);
+
   const restartListeningAfterDelay = useCallback((delayMs: number = 500) => {
-    console.log(`[SpeechRecognition] Scheduling recognition restart in ${delayMs}ms to prevent audio feedback`);
-    // Clear any existing timeout
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
-    }
+    console.log(`[SpeechRecognition] restartListeningAfterDelay called - DEPRECATED: Recognition stays active`);
   }, []);
 
   const enableReplyWindow = useCallback(() => {
     console.log("[SpeechRecognition] enableReplyWindow called - Switching to reply listening mode");
     console.log(`[SpeechRecognition] Current state: ${listeningStateRef.current}`);
+    
+    // ⚠️ RESPECT USER MIC CONTROL: If user explicitly disabled mic, don't auto-enable
+    if (isUserMicDisabledRef.current) {
+      console.log("[SpeechRecognition] ⚠️ User has explicitly disabled mic - NOT enabling reply window (respecting user intent)");
+      return;
+    }
 
     if (!recognitionRef.current) {
       console.error("[SpeechRecognition] Recognition instance not initialized!");
       return;
     }
 
-    // Clear any existing reply window timeout
     if (replyWindowTimeoutRef.current) {
       clearTimeout(replyWindowTimeoutRef.current);
       replyWindowTimeoutRef.current = null;
     }
 
-    // Clear any existing reply window silence timeout
     if (replyWindowSilenceTimeoutRef.current) {
       clearTimeout(replyWindowSilenceTimeoutRef.current);
       replyWindowSilenceTimeoutRef.current = null;
     }
 
-    // Switch to reply listening mode (skip wake word requirement)
+    console.log("[SpeechRecognition] 🧹 Clearing all audio buffers to prevent echo...");
+    lastFinalTranscript.current = "";
+    replyWindowTranscriptRef.current = "";
+    replyWindowSpeechDetectedRef.current = false;
+    replyWindowStartTimeRef.current = Date.now();
+
+    isIntentionallyStopped.current = false;
+
     console.log("[SpeechRecognition] 🎯 Entering reply window - user can speak without saying wake word");
-    lastFinalTranscript.current = ""; // Reset transcript for this new window
-    replyWindowSpeechDetectedRef.current = false; // Reset speech detection flag
-    replyWindowTranscriptRef.current = ""; // Reset accumulated text
     setListeningState("listening_for_reply");
 
-    // Set 2-second timeout to revert back to wake word mode
+    console.log("[SpeechRecognition] 🔄 FORCE RESTARTING recognition to clear interim buffer from AI speech...");
+    try {
+      recognitionRef.current.stop();
+      console.log("[SpeechRecognition] ✓ Stopped recognition");
+    } catch (error) {
+      console.log("[SpeechRecognition] Recognition already stopped");
+    }
+
+    setTimeout(() => {
+      replyWindowStartTimeRef.current = Date.now();
+      console.log("[SpeechRecognition] ▶️ Starting fresh recognition session...");
+      try {
+        recognitionRef.current?.start();
+        console.log("[SpeechRecognition] ✓ Recognition restarted with FRESH buffer (no echo)");
+      } catch (error) {
+        console.error("[SpeechRecognition] Error restarting recognition:", error);
+      }
+    }, 100);
+
     replyWindowTimeoutRef.current = setTimeout(() => {
       console.log("[SpeechRecognition] ⏱️ Reply window timeout (2 seconds) - No speech detected. Reverting to wake word mode...");
       setListeningState("listening_for_wakeword");
       replyWindowTimeoutRef.current = null;
-      // Stop recognition to trigger onend handler which will auto-restart
       try {
         recognitionRef.current?.stop();
         console.log("[SpeechRecognition] ✓ Stopped recognition to return to wake word mode");
@@ -631,6 +653,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     listeningState,
     startListening,
     stopListening,
+    pauseRecognition,
     restartListeningAfterDelay,
     enableReplyWindow,
   };

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const PHONE_DETECTION_THRESHOLD_MS = 10000; // 10 seconds
+const COOLDOWN_DURATION_MS = 60000; // 1 minute cooldown after phone detection ends
 
 interface PhoneDetectorProps {
   onPhoneDetectedForTooLong: (durationMs: number) => void;
@@ -21,6 +22,7 @@ export default function PhoneDetector({ onPhoneDetectedForTooLong }: PhoneDetect
   const phoneDetectedStartTime = useRef<number | null>(null);
   const lastDetectionTime = useRef<number | null>(null);
   const scoldingTriggered = useRef<boolean>(false);
+  const cooldownEndTime = useRef<number | null>(null);
 
 
   // Request camera access and start video playback
@@ -116,7 +118,16 @@ export default function PhoneDetector({ onPhoneDetectedForTooLong }: PhoneDetect
 
         const currentTime = Date.now();
 
+        // Check if we're in cooldown period
+        const isInCooldown = cooldownEndTime.current !== null && currentTime < cooldownEndTime.current;
+
         if (phone_detected) {
+          // Skip detection if in cooldown
+          if (isInCooldown) {
+            console.log("[PhoneDetector] Cooldown active, ignoring detection.");
+            return;
+          }
+
           if (phoneDetectedStartTime.current === null) {
             phoneDetectedStartTime.current = currentTime;
             console.log("[PhoneDetector] Phone detection started.");
@@ -131,7 +142,9 @@ export default function PhoneDetector({ onPhoneDetectedForTooLong }: PhoneDetect
           }
         } else {
           if (phoneDetectedStartTime.current !== null) {
-            console.log("[PhoneDetector] Phone no longer detected. Resetting timers.");
+            console.log("[PhoneDetector] Phone no longer detected. Starting 1 minute cooldown.");
+            // Set cooldown end time to 1 minute from now
+            cooldownEndTime.current = currentTime + COOLDOWN_DURATION_MS;
           }
           phoneDetectedStartTime.current = null;
           lastDetectionTime.current = null;
@@ -145,7 +158,7 @@ export default function PhoneDetector({ onPhoneDetectedForTooLong }: PhoneDetect
         lastDetectionTime.current = null;
         scoldingTriggered.current = false;
       }
-    }, 5000); // every 5 seconds
+    }, 4000); // every 4 seconds
 
     return () => {
       console.log("[PhoneDetector] Cleaning up detection interval.");
@@ -222,7 +235,7 @@ export default function PhoneDetector({ onPhoneDetectedForTooLong }: PhoneDetect
         
         {/* Hover hint */}
         {!isHovering && hasCameraPermission && !isRequestingPermission && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-gray-800/80 to-gray-900/80 backdrop-blur-sm">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-gray-800 to-gray-900 backdrop-blur-sm">
             <p className="text-xs font-medium text-gray-300">Hover to preview camera</p>
           </div>
         )}

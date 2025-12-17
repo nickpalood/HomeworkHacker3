@@ -9,6 +9,7 @@ interface ScreenCaptureToggleProps {
   isCapturing: boolean;
   onRequestPermission: () => void;
   onToggle: () => void;
+  isTextInputActive?: boolean; // True when text input is being used (screen capture won't work)
 }
 
 export function ScreenCaptureToggle({
@@ -17,6 +18,7 @@ export function ScreenCaptureToggle({
   isCapturing,
   onRequestPermission,
   onToggle,
+  isTextInputActive = false,
 }: ScreenCaptureToggleProps) {
   if (!hasPermission) {
     return (
@@ -26,7 +28,7 @@ export function ScreenCaptureToggle({
             onClick={onRequestPermission}
             className={cn(
               "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all",
-              "bg-muted text-muted-foreground hover:bg-[#f67555] hover:text-white"
+              "bg-muted text-muted-foreground hover:bg-primary hover:text-white"
             )}
           >
             <Monitor className="h-4 w-4" />
@@ -45,19 +47,35 @@ export function ScreenCaptureToggle({
       <div
         className={cn(
           "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-all",
-          isEnabled ? "bg-[#68639c]/20 text-[#68639c]" : "bg-muted text-muted-foreground"
+          isTextInputActive
+            ? "bg-muted/60 text-muted-foreground opacity-60" // Muted when text input active
+            : isEnabled
+            ? "bg-secondary/20 text-secondary glow-secondary"
+            : "bg-muted text-muted-foreground"
         )}
       >
         {isCapturing ? (
           <Camera className="h-4 w-4 animate-pulse" />
+        ) : isTextInputActive ? (
+          <MonitorOff className="h-4 w-4" /> // Show OFF icon when text input active
         ) : isEnabled ? (
           <Monitor className="h-4 w-4" />
         ) : (
           <MonitorOff className="h-4 w-4" />
         )}
-        <span>{isEnabled ? "Screen capture ON" : "Screen capture OFF"}</span>
+        <span>
+          {isTextInputActive
+            ? "Screen capture OFF (text mode)"
+            : isEnabled
+            ? "Screen capture ON"
+            : "Screen capture OFF"}
+        </span>
       </div>
-      <Switch checked={isEnabled} onCheckedChange={onToggle} />
+      <Switch
+        checked={isEnabled}
+        onCheckedChange={onToggle}
+        disabled={isTextInputActive} // Disable toggle when text input active
+      />
     </div>
   );
 }

@@ -168,7 +168,7 @@ export function useHomeworkHacker(options: UseHomeworkHackerOptions = {}) {
 
         // Use streaming API
         const response = await aiRef.current.models.generateContentStream({
-          model: "gemini-2.5-flash",
+          model: "gemini-2.5-flash-lite",
           contents: {
             role: "user",
             parts: contentParts,
@@ -320,7 +320,7 @@ export function useHomeworkHacker(options: UseHomeworkHackerOptions = {}) {
         let chunkCount = 0;
 
         const response = await aiRef.current.models.generateContentStream({
-          model: "gemini-2.5-flash",
+          model: "gemini-2.5-flash-lite",
           contents: {
             role: "user",
             parts: contentParts,
@@ -403,7 +403,7 @@ export function useHomeworkHacker(options: UseHomeworkHackerOptions = {}) {
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: "This is a long response message. Blah blah blah blah blah. Blah blah blah blah blah. Blah blah blah blah blah.",
+            content: "This is a mock response generated for testing purposes.",
             timestamp: new Date(),
             type: "normal",
           },

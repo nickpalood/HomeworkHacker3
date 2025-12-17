@@ -13,13 +13,11 @@ export function AudioWave({ isActive, className }: AudioWaveProps) {
           key={i}
           className={cn(
             "w-1 rounded-full transition-all duration-150",
-            isActive ? "wave-animation" : "h-2",
-            i % 2 === 0 ? "bg-[#f67555]" : "bg-[#68639c]"
+            "h-2",
+            i % 2 === 0 ? "bg-primary" : "bg-secondary"
           )}
           style={{
             height: isActive ? "24px" : "8px",
-            animationDelay: `${i * 0.1}s`,
-            animationDuration: isActive ? "1.2s" : "0s"
           }}
         />
       ))}

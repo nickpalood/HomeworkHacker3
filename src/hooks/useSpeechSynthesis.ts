@@ -3,14 +3,19 @@ import { useState, useCallback, useRef, useEffect } from "react";
 // This hook uses ElevenLabs TTS when an API key and voice id are provided
 // via environment variables. If not available it falls back to
 // the browser `speechSynthesis` API.
-export function useSpeechSynthesis() {
+export function useSpeechSynthesis(volume: number = 1) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const volumeRef = useRef(volume);
 
   const ELEVEN_API_KEY = (import.meta.env.VITE_ELEVENLABS_KEY as string) || "";
   const ELEVEN_VOICE = (import.meta.env.VITE_ELEVENLABS_VOICE_ID as string) || "";
+
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
 
   useEffect(() => {
     // Consider supported if either ElevenLabs config is present or browser TTS exists
@@ -83,6 +88,8 @@ export function useSpeechSynthesis() {
           
           // Apply voice speed to audio playback
           audio.playbackRate = voiceSpeed;
+          // Apply volume setting
+          audio.volume = volumeRef.current;
 
           audio.onended = () => {
             setIsSpeaking(false);
@@ -118,7 +125,7 @@ export function useSpeechSynthesis() {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = voiceSpeed;
       utterance.pitch = 1;
-      utterance.volume = 1;
+      utterance.volume = volumeRef.current;
 
       const voices = window.speechSynthesis.getVoices();
       const preferredVoice = voices.find(

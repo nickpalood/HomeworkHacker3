@@ -116,11 +116,11 @@ export function ChatInterface({
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="text-center space-y-2">
-              <div className="mx-auto h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+              <div className="mx-auto h-16 w-16 rounded-full flex items-center justify-center">
                 <Volume2 className="h-8 w-8 text-muted-foreground" />
               </div>
               <p className="text-muted-foreground text-sm">
-                Press the microphone or type to start studying
+                Press the microphone button or type to start studying
               </p>
             </div>
           </div>
@@ -159,7 +159,7 @@ export function ChatInterface({
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Type your question or paste an image..."
             disabled={isLoading}
-            className="flex-1 bg-transparent focus-visible:ring-2 focus-visible:ring-[#f67555]"
+            className="flex-1 bg-transparent focus-visible:ring-2 focus-visible:ring-primary"
           />
           <input 
             type="file"
@@ -174,8 +174,7 @@ export function ChatInterface({
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading}
             size="icon"
-            variant="outline"
-            className="border-2 border-[#68639c]/50 text-[#68639c] hover:bg-[#68639c]/20 hover:text-white hover:shadow-[0_0_12px_1px_#68639cb3,0_0_24px_4px_#68639c66]"
+            className="border-2 border-secondary/50 text-secondary bg-transparent hover:bg-secondary/20 hover:border-secondary hover:text-secondary hover:glow-secondary transition-all"
           >
             <Paperclip className="h-4 w-4" />
           </Button>
@@ -183,7 +182,7 @@ export function ChatInterface({
             type="submit"
             disabled={(!inputValue.trim() && images.length === 0) || isLoading}
             size="icon"
-            className="bg-[#f67555] text-white shadow-[0_0_12px_1px_#f67555b3,0_0_24px_4px_#f6755566]"
+            className="bg-primary text-white glow-primary hover:glow-primary-lg transition-all"
           >
             <Send className="h-4 w-4" />
           </Button>

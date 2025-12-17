@@ -21,8 +21,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         className={cn(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
           isUser 
-            ? "bg-[#f67555]/80 text-white shadow-[0_0_12px_1px_#f67555b3,0_0_24px_4px_#f6755566]" 
-            : "bg-[#68639c]/80 text-white shadow-[0_0_12px_1px_#68639cb3,0_0_24px_4px_#68639c66]"
+            ? "bg-primary text-white glow-primary" 
+            : "bg-secondary text-white glow-secondary"
         )}
       >
         {isUser ? <User className="h-5 w-5" /> : <Bot className="h-5 w-5" />}
@@ -31,10 +31,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       {/* Content */}
       <div
         className={cn(
-          "flex max-w-[75%] flex-col gap-2 rounded-2xl px-4 py-3",
+          "flex max-w-[75%] flex-col gap-2 rounded-2xl px-4 py-3 shadow-[0_4px_8px_rgba(0,0,0,0.25)]",
           isUser
-            ? "bg-[#f67555]/80 text-white rounded-br-md"
-            : "glass-card rounded-bl-md"
+            ? "bg-primary text-white rounded-br-md"
+            : ""
         )}
       >
         {/* Images indicator */}

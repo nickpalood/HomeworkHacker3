@@ -45,12 +45,9 @@ export function SettingsModal({
       <DialogContent className="sm:max-w-md bg-white text-black">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5 text-[#68639c]" />
+            <SettingsIcon className="w-5 h-5 text-secondary" />
             Settings
           </DialogTitle>
-          <DialogDescription className="text-gray-500">
-            Customize your Study Buddy experience
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -67,7 +64,7 @@ export function SettingsModal({
               placeholder="Enter your name"
               value={tempUserName}
               onChange={(e) => handleUserNameChange(e.target.value)}
-              className="mt-2 bg-gray-100 text-black focus-visible:ring-2 focus-visible:ring-[#f67555]"
+              className="mt-2 bg-gray-100 text-black focus-visible:ring-2 focus-visible:ring-primary"
             />
           </div>
 

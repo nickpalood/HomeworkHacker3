@@ -26,7 +26,7 @@ export function PersonalityToggle({ personality, onToggle }: PersonalityTogglePr
         className={cn(
           "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all",
           personality === "sarcastic"
-            ? "bg-[#68639c] text-white shadow-sm"
+            ? "bg-secondary text-white glow-secondary"
             : "text-muted-foreground hover:text-foreground"
         )}
       >
